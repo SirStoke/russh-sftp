@@ -11,6 +11,22 @@ use crate::{
     utils::read_packet,
 };
 
+#[cfg(target_arch = "wasm32")]
+fn spawn_server_task<F>(future: F)
+where
+    F: std::future::Future<Output = ()> + 'static,
+{
+    wasm_bindgen_futures::spawn_local(future);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_server_task<F>(future: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    tokio::spawn(future);
+}
+
 macro_rules! into_wrap {
     ($id:expr, $handler:expr, $var:ident; $($arg:ident),*) => {
         match $handler.$var($($var.$arg),*).await {
@@ -76,7 +92,7 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     H: Handler + Send + 'static,
 {
-    tokio::spawn(async move {
+    spawn_server_task(async move {
         loop {
             match process_handler(&mut stream, &mut handler).await {
                 Err(Error::UnexpectedEof) => break,
